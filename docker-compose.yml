@@ -1,0 +1,48 @@
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "mcp_server.server"]
+    environment:
+      DATA_DIR: /data
+      DATASET_URL: https://www.kaggle.com/api/v1/datasets/download/olistbr/brazilian-ecommerce
+      INGEST_LOCK: /data/.ingest.lock
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - olist_data:/data
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck_mcp.py"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATA_DIR: /data
+      DB_PATH: /data/app.db
+      MCP_URL: http://mcp:8000/mcp
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/free}
+      AGENT_MODE: ${AGENT_MODE:-llm}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-25}
+      TOOL_TIMEOUT_SECONDS: ${TOOL_TIMEOUT_SECONDS:-15}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+    depends_on:
+      mcp:
+        condition: service_healthy
+    volumes:
+      - olist_data:/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+volumes:
+  olist_data:
