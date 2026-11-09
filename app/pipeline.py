@@ -41,7 +41,11 @@ class AnalyticsPipeline:
 
         try:
             agent = self.llm if mode == 'llm' else self.fallback
-            result = await agent.run(query)
+            # Bound the complete model/tool loop, not just individual completions.
+            result = await asyncio.wait_for(
+                agent.run(query),
+                timeout=settings.llm_timeout_seconds if mode == 'llm' else None,
+            )
         except Exception as exc:
             if mode == 'llm':
                 result = await self.fallback.run(query)
@@ -90,6 +94,10 @@ def compare_payloads(old: dict[str, Any], new: dict[str, Any]) -> tuple[bool, fl
     if not a or not b:
         return old.get('chart_config') != new.get('chart_config'), 1.0 if old.get('chart_config') != new.get('chart_config') else 0.0
     n = min(len(a), len(b))
+    old_data = old.get('chart_config', {}).get('data', {})
+    new_data = new.get('chart_config', {}).get('data', {})
+    if len(a) != len(b) or old_data.get('labels') != new_data.get('labels'):
+        return True, 1.0
     if n == 0:
         return True, 1.0
     denom = sum(abs(x) for x in a[:n]) / n or 1.0

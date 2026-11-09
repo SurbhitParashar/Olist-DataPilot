@@ -1,5 +1,15 @@
 # Olist Sales Analytics Chatbot
 
+## Vercel deployment
+
+The app supports a single Vercel FastAPI deployment. `vercel.json` builds the Vite UI and prepares the public Olist SQLite database at build time. The function reads the bundled database without runtime downloads or writes. On Vercel, the official MCP client connects to the analytics MCP server in-process; Docker keeps its separate HTTP MCP service.
+
+Set `OPENROUTER_API_KEY` in the Vercel project's production environment, then deploy the repository root using `npx vercel@65.7.0 --prod`. `OPENROUTER_MODEL` defaults to `openrouter/free`. If the key is absent or the model times out, the deterministic agent returns real dataset results. Chart types are selected from the returned data shape in both modes.
+
+The browser dashboard saves pins in localStorage, including chart snapshots. Pins survive reloads and deployments in that browser; they do not sync across browsers. Refresh calls the API again and compares the saved snapshot with the new data. The original SQLite pin API remains available for Docker deployments with a persistent volume.
+
+Validation: install `pytest` alongside `requirements.txt`, then run `python -m pytest -q`. To exercise the browser flow, install Playwright and Chromium, start the app, and run `python scripts/browser_smoke.py`. Set `BASE_URL` for a deployed host, or `CHROME_PATH` for an existing Chromium executable.
+
 I built this as a small analytics product rather than a single LLM prompt wrapped around a database.
 The main idea is simple: an analyst asks a question in normal English, the agent decides which analytics capabilities it needs, MCP owns the data access, and the API turns the returned rows into a predictable Chart.js response. Pins are stored separately so a dashboard survives restarts.
 
@@ -208,7 +218,7 @@ OpenRouter's current tool-calling flow is request -> `tool_calls` -> application
 
 ### Fallback agent
 
-The fallback is intentionally boring, which is useful during an outage. It uses keyword routing, extracts obvious parameters with deterministic regexes, calls one MCP capability, and always chooses a bar chart downstream. That matches the requirement that the fallback use no LLM and always produce a bar chart.
+The fallback uses keyword routing, extracts parameters with deterministic regexes, and calls one MCP capability without an LLM. The shared chart builder selects the visualization from the returned data shape. The complete LLM/tool loop is bounded by `LLM_TIMEOUT_SECONDS` before switching to fallback.
 
 ## 9. Chart selection logic
 
@@ -228,7 +238,7 @@ For genuinely ambiguous shapes, the design leaves room for the API layer to retu
 
 ## 10. Dashboard and refresh diff
 
-Pins are stored in a small application SQLite database on the named Docker volume, so they survive a restart.
+The dashboard stores pins and snapshots in the browser's localStorage, so they survive page reloads and server restarts. The original `/api/pins` endpoints also support SQLite persistence on a named Docker volume for clients that use those endpoints directly.
 
 A pin stores the original natural-language query and the last generated payload. Refreshing a pin re-runs the original query, then compares the numeric chart series against the saved snapshot.
 

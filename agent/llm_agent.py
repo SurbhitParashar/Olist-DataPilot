@@ -32,20 +32,18 @@ class OpenRouterAgent:
         self.mcp = MCPAnalyticsClient(mcp_url, tool_timeout)
 
     async def _tool_specs(self) -> list[dict[str, Any]]:
-        from mcp import Client
-        async with Client(self.mcp_url) as client:
-            page = await client.list_tools()
-            return [
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': t.name,
-                        'description': t.description or t.title or t.name,
-                        'parameters': t.input_schema,
-                    },
-                }
-                for t in page.tools
-            ]
+        page = await self.mcp.list_tools()
+        return [
+            {
+                'type': 'function',
+                'function': {
+                    'name': t.name,
+                    'description': t.description or t.title or t.name,
+                    'parameters': t.input_schema,
+                },
+            }
+            for t in page.tools
+        ]
 
     async def _completion(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None):
         kwargs: dict[str, Any] = {
@@ -87,6 +85,8 @@ class OpenRouterAgent:
                     args = {}
                     warnings.append(f'Invalid arguments returned for {tool_call.function.name}; tool skipped.')
                     trace.append(ToolTrace(tool_call.function.name, {}, False, error='invalid JSON arguments'))
+                    messages.append({'role': 'tool', 'tool_call_id': tool_call.id,
+                                     'content': '{"ok": false, "error": {"message": "Invalid JSON arguments"}}'})
                     continue
 
                 try:

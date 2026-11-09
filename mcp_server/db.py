@@ -9,7 +9,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-DATA_DIR = Path(os.getenv('DATA_DIR', '/data'))
+DATA_DIR = Path(os.getenv('DATA_DIR', str(Path(__file__).resolve().parents[1] / 'data')))
 DB_PATH = DATA_DIR / 'olist.db'
 DATASET_URL = os.getenv(
     'DATASET_URL',
@@ -152,7 +152,9 @@ def _ingest(root: Path) -> None:
 
 def execute(query: str, params: tuple = (), timeout_seconds: float = 15.0) -> list[dict]:
     ensure_dataset()
-    conn = sqlite3.connect(DB_PATH, timeout=timeout_seconds)
+    # The bundled analytics database is immutable on Vercel.
+    conn = sqlite3.connect(f'{DB_PATH.as_uri()}?mode=ro&immutable=1' if os.getenv('VERCEL') == '1' else DB_PATH,
+                           timeout=timeout_seconds, uri=os.getenv('VERCEL') == '1')
     conn.row_factory = sqlite3.Row
     deadline = time.monotonic() + timeout_seconds
     try:

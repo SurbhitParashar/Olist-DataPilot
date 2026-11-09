@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from pathlib import Path
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -20,6 +21,7 @@ CREATE INDEX IF NOT EXISTS idx_pinned_updated_at ON pinned_charts(updated_at DES
 
 
 def init_db() -> None:
+    Path(settings.db_path).parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(settings.db_path) as conn:
         conn.executescript(SCHEMA)
         conn.commit()

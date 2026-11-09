@@ -5,5 +5,11 @@ __pycache__/
 .venv/
 node_modules/
 frontend/dist/
+.vercel/
+playwright-report/
+test-results/
 data/*
 !data/.gitkeep
+
+.vercel
+.env*

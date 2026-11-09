@@ -20,7 +20,7 @@ pipeline = AnalyticsPipeline()
 
 app = FastAPI(title='Olist Sales Analytics Chatbot', version='1.0.0')
 
-frontend_dist = Path('/app/frontend/dist')
+frontend_dist = Path(__file__).resolve().parents[1] / 'frontend' / 'dist'
 if frontend_dist.exists():
     app.mount('/assets', StaticFiles(directory=frontend_dist / 'assets'), name='assets')
 
@@ -46,6 +46,13 @@ async def pin(request: PinRequest):
     pin_id = hashlib.sha256(f"{request.query}:{os.urandom(8).hex()}".encode()).hexdigest()[:16]
     save_pin(pin_id, request.query, request.chart_payload)
     return {'id': pin_id}
+
+
+@app.post('/api/refresh')
+async def refresh_snapshot(request: PinRequest):
+    payload = await pipeline.run(request.query)
+    changed, score = compare_payloads(request.chart_payload, payload)
+    return {'changed': changed, 'change_score': round(score, 4), 'payload': payload}
 
 
 @app.delete('/api/pins/{pin_id}')

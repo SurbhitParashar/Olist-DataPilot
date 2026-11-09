@@ -7,7 +7,7 @@ from agent.mcp_client import MCPAnalyticsClient
 
 
 class RuleBasedAgent:
-    """Deterministic safety net: pick one analytics tool using keywords and always use a bar chart downstream."""
+    """Deterministic safety net: select a typed MCP analytics tool using keywords."""
 
     def __init__(self, mcp_url: str, tool_timeout: float):
         self.mcp = MCPAnalyticsClient(mcp_url, tool_timeout)
@@ -21,7 +21,7 @@ class RuleBasedAgent:
         elif 'first half of 2017' in q:
             args.update(date_from='2017-01-01', date_to='2017-06-30')
         else:
-            years = re.findall(r'\b(2016|2017|2018)\b', q)
+            years = re.findall(r'\b(20\d{2})\b', q)
             if years:
                 y = years[0]
                 args.update(date_from=f'{y}-01-01', date_to=f'{y}-12-31')
@@ -55,6 +55,19 @@ class RuleBasedAgent:
     async def run(self, query: str) -> AgentResult:
         name = self._choose(query)
         args = self._params(query)
+        allowed = {
+            'order_trends_tool': {'date_from', 'date_to', 'metric'},
+            'category_performance_tool': {'date_from', 'date_to', 'limit', 'sort', 'category'},
+            'seller_performance_tool': {'date_from', 'date_to', 'state', 'limit', 'sort'},
+            'review_analysis_tool': {'date_from', 'date_to', 'state', 'category', 'group_by'},
+            'payment_breakdown_tool': {'date_from', 'date_to', 'payment_types'},
+            'delivery_performance_tool': {'date_from', 'date_to', 'state', 'route'},
+        }
+        args = {key: value for key, value in args.items() if key in allowed[name]}
+        if 'electronics' in query.lower() and 'category' in allowed[name]:
+            args['category'] = 'electronics'
+        if name == 'payment_breakdown_tool' and 'credit card' in query.lower() and 'boleto' in query.lower():
+            args['payment_types'] = ['credit_card', 'boleto']
         result = (await self.mcp.execute([(name, args)]))[0]
         _, sent_args, data, is_error = result
         rows = data.get('rows', []) if isinstance(data, dict) else []
@@ -70,7 +83,7 @@ class RuleBasedAgent:
             rows=rows,
             tool_results=[{'name': name, 'arguments': sent_args, 'data': data}],
             title='Rule-based Olist analysis',
-            insight='Results were produced with the deterministic fallback agent; the chart type is intentionally fixed to a bar chart.',
+            insight=f'The rule-based agent returned {len(rows)} result rows from the Olist dataset.',
             chart_type_hint='bar',
             assumptions=assumptions,
             warnings=warning,
